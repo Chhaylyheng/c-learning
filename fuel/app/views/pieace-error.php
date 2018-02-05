@@ -1,0 +1,1 @@
+<p class="error-box"><?php echo nl2br($sMsg); ?></p>

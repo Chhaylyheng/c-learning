@@ -1,0 +1,27 @@
+<?php
+$i18n_Password = array(
+		'登録されていないメールアドレスです。' => "This E-mail Address does not exist.",
+		'先生パスワードの再設定' => "Reset Instructor Password",
+		'新しいパスワード' => "New Password",
+		'パスワード再設定URLの有効期限が切れています。改めて、変更手続きをお願いいたします。' => "The Password Reset URL has expired. Please initiate it again.",
+		'パスワードを再設定する対象の先生情報が見つかりませんでした。改めて、変更手続きをお願いいたします。' => "The information for resetting your Password cannot be found. Please reset your Password again.",
+		'パスワードを再設定するメールアドレスを入力してください。' => "Please enter your E-mail Address to reset your Password.",
+		'入力されたメールアドレスに再設定手続きのメールを送信いたします。' => "You will receive and e-mail with a link to reset your Password shortly.",
+		'パスワード再設定メールを送信' => "Send Password Reset e-mail.",
+		'パスワード再設定手続きのメールをお送りしました。' => "An e-mail will be sent to the E-mail Address your registered with.",
+		'メールに記載されているURLのページを表示して手続きを完了してください。' => "Please visit the URL sent to you by e-mail and complete the change procedure",
+		'パスワードを入力してください' => "Please enter your Password.",
+		'確認のため再度入力してください' => "Please enter your Password again for confirmation.",
+		'パスワードの再設定' => "Reset Password",
+		'パスワードの再設定が完了しました。' => "Completed Reset Password.",
+		'次回ログインより新しいパスワードを利用してログインできます。' => "You can log in using a new password the next time you log in.",
+		'学生パスワードの再設定' => "Student Password Reset",
+		'パスワードを変更しました。' => "Password changed.",
+		'パスワードを再設定する対象の学生情報が見つかりませんでした。改めて、変更手続きをお願いいたします。' => "The information for resetting your Password cannot be found. Please reset your Password again.",
+		'初回ログインパスワードの変更' => "Change the initial login Password.",
+		'現在利用されているパスワードは初期設定パスワードです。' => "The current Password is the Default Password.",
+		'パスワードを変更してください。' => "Please change your Password.",
+		'※メールアドレスを登録していない場合は再設定できません。その場合は履修している講義の先生にパスワードのリセットをして貰ってください。' => "※ If you did not register with an E-mail Address, you cannot reset your Password. Please request your Instructor to reset your Password.",
+		'パスワードの変更' => "Change password",
+
+);

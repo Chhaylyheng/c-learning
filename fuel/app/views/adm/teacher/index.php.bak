@@ -1,0 +1,106 @@
+<?php if (!is_null($aTeachers)): ?>
+<script type="text/javascript">
+$(function() {
+	var sskey = 'cl_adm_teacher_sort';
+	var defaultSort = [[1,0],[3,0],[4,0]];
+
+	var currentSort = new Array();
+	if(('sessionStorage' in window) && (window.sessionStorage !== null)) {
+		store = sessionStorage.getItem(sskey);
+		if (store) {
+			store = store.split('|');
+			for (i = 0; i < store.length; i++) {
+				currentSort.push(store[i].split(','));
+			}
+		}
+	}
+	if (!currentSort || currentSort == null || currentSort.length == 0) {
+		currentSort = defaultSort;
+	}
+
+	$('table.table-sort').tablesorter({
+		cssHeader: 'headerSort',
+		headers: {
+			1: {sorter: "text"},
+			2: {sorter: false},
+		},
+		sortList: currentSort,
+		widgets: ['zebra']
+	}).bind("sortEnd", function(sorter) {
+		currentSort = sorter.target.config.sortList;
+		currentSort = currentSort.join('|');
+		setSessionStorage(sskey, currentSort);
+	});
+});
+</script>
+<?php endif; ?>
+
+	<section class="pt0">
+		<div class="info-box table-box record-table admin-table">
+		<table class="kreport-data table-sort">
+		<thead>
+			<tr><th>先生ID</th><th>契約</th><th>内容</th><th>学校</th><th>氏名</th><th>メールアドレス</th><th>実施中講義</th><th>終了講義</th><th>最終ログイン</th></tr>
+		</thead>
+		<tbody>
+			<?php
+				if (!is_null($aTeachers)):
+					$iMax = count($aTeachers);
+					foreach ($aTeachers as $i => $aT):
+						$sLockClass = '';
+						$sLockIcon  = '';
+						if ($aT['ttStatus'] == 0):
+							$sLockClass = 'font-red2';
+							$sLockIcon = '<i class="fa fa-lock mr4"></i>';
+						endif;
+			?>
+<tr>
+<td class="<?php echo $sLockClass; ?>" nowrap>
+<?php echo $sLockIcon.$aT['ttID']; ?>
+</td>
+<td class="" nowrap>
+<span style="display: none;"><?php echo ($aT['ptID'])? $aT['ptID']:98; ?></span>
+<?php if ($aT['ptID'] != 99): ?>
+<a href="/adm/teacher/contract/<?php echo $aT['ttID']; ?>">
+<?php echo $aT['ptName']; ?>
+<?php echo (is_null($aT['coTermDate']))? 'Quick':(($aT['coTermDate'] != '0000-00-00')? '<br>～ '.date('Y/m/d',strtotime($aT['coTermDate'])):''); ?>
+</a>
+<?php else: ?>
+<?php echo $aT['ptName']; ?>
+<?php endif; ?>
+</td>
+<td class="" nowrap><?php if ($aT['ptID'] != 99): ?>
+	講義数：<?php echo (int)$aT['ttClassNum'].'/'.(int)$aT['coClassNum']; ?><br>
+	履修人数：<?php echo (int)$aT['ttStuNum'].'/'.(int)$aT['coStuNum']; ?><br>
+	容量：<?php echo \Clfunc_Common::FilesizeFormat($aT['ttDiskUsed'],1).'/'.(int)$aT['coCapacity'].'GB'; ?><br>
+<?php else: ?>
+<span class="font-green"><?php echo $aT['gtName']; ?></span>
+<?php endif; ?>
+</td>
+<td class="">
+<?php echo $aT['cmName']; ?>
+</td>
+<td class="">
+<?php echo $aT['ttName']; ?>
+</td>
+<td class="">
+<?php echo $aT['ttMail']; ?>
+</td>
+<td class="">
+<?php echo $aT['ttClassNum']; ?>
+</td>
+<td class="">
+<?php echo $aT['ttCloseNum']; ?>
+</td>
+<td class="" nowrap>
+<?php echo ($aT['ttLoginNum'])? nl2br(ClFunc_Tz::tz("Y/m/d\nH:i",$tz,$aT['ttLoginDate'])).'（'.$aT['ttLoginNum'].'）':'未ログイン'; ?>
+<a href="/adm/teacher/sLogin/<?php echo $aT['ttID']?>" target="_blank"><i class="fa fa-address-card-o ml4"></i></a>
+</td>
+</tr>
+					<?php
+							endforeach;
+						endif;
+					?>
+				</tbody>
+			</table>
+		</div>
+	</section>

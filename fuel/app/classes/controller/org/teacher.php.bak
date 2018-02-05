@@ -1,0 +1,661 @@
+<?php
+class Controller_Org_Teacher extends Controller_Org_Base
+{
+	private $bn = 'org/teacher';
+
+	private $aTeachers = null;
+	private $aTeacherBase = array(
+		't_mail'=>null,
+		't_pass'=>null,
+		't_name'=>null,
+		't_school'=>null,
+		't_dept'=>null,
+		't_subject'=>null,
+	);
+	private $aSearchCol = array(
+		'tv.ttMail','tv.ttName','tv.ttDept','tv.ttSubject'
+	);
+
+	public function action_index()
+	{
+		$sTitle = __('先生一覧');
+		# パンくずリスト生成
+		$this->template->set_global('breadcrumbs',array(array('name'=>$sTitle)));
+		# ページタイトル生成
+		$this->template->set_global('pagetitle',$sTitle);
+
+		$aWords = null;
+		$sWords = null;
+		$sW = Input::get('w',false);
+		if ($sW)
+		{
+			$aW = \Clfunc_Common::getSearchWords($sW);
+			$aWords = \Clfunc_Common::getSearchWhere($aW,$this->aSearchCol);
+			$sWords = implode(' ', $aW);
+		}
+
+		$aWhere = array(
+			array('gtID','=',$this->aGroup['gtID'])
+		);
+
+		$result = Model_Group::getGroupTeachers(array(array('gtp.gtID','=',$this->aGroup['gtID'])),null,array('tv.ttName'=>'asc'),$aWords);
+		if (count($result))
+		{
+			$this->aTeachers = $result->as_array();
+		}
+
+		# カスタムボタン
+		$aCustomMenu = array(
+			array(
+				'url'  => DS.$this->bn.DS.'add',
+				'name' => __('先生の新規作成'),
+			),
+			array(
+				'url'  => DS.$this->bn.DS.'csv',
+				'name' => __('CSVから先生の登録'),
+			),
+			array(
+				'url'  => '/org/output/teacherlist.csv',
+				'name' => __('一覧のCSVダウンロード'),
+				'icon' => 'fa-download',
+				'option' => array(
+					'target' => '_blank',
+				)
+			),
+		);
+		$this->template->set_global('aCustomMenu',$aCustomMenu);
+
+		$aSearchForm = array(
+				'url' => '/org/teacher',
+		);
+		$this->template->set_global('aSearchForm',$aSearchForm);
+		$this->template->set_global('sWords',$sWords);
+
+		$this->template->content = View::forge($this->bn.DS.'index');
+		$this->template->content->set('aTeachers',$this->aTeachers);
+		$this->template->javascript = array('cl.org.teacher.js');
+		return $this->template;
+	}
+
+	public function action_add()
+	{
+		# タイトル
+		$sTitle = '先生の新規登録';
+		# パンくずリスト生成
+		$this->aBread[] = array('link'=>'/teacher','name'=>__('先生一覧'));
+		$this->aBread[] = array('name'=>$sTitle);
+		$this->template->set_global('breadcrumbs',$this->aBread);
+		$this->template->set_global('pagetitle',$sTitle);
+
+		if (!Input::post(null,false))
+		{
+			$data = $this->aTeacherBase;
+
+			$data['error'] = null;
+			$this->template->content = View::forge($this->bn.DS.'edit',$data);
+			$this->template->javascript = array('cl.school_select.js');
+			return $this->template;
+		}
+
+		$aInput = Input::post();
+		$val = Validation::forge();
+		$val->add_callable('Helper_CustomValidation');
+
+		$val->add('t_mail', __('メールアドレス'))
+			->add_rule('required')
+			->add_rule('valid_email')
+			->add_rule('max_length',200)
+			->add_rule('tmail_chk');
+
+		if (trim($aInput['t_pass']))
+		{
+			$val->add('t_pass', __('パスワード'))
+			->add_rule('required')
+			->add_rule('trim')
+			->add_rule('min_length', 8)
+			->add_rule('max_length', 32)
+			->add_rule('passwd_char');
+		}
+
+		$val->add('t_name', __('氏名'))
+		->add_rule('required')
+		->add_rule('trim')
+		->add_rule('max_length', 50);
+
+		if (!CL_CAREERTASU_MODE)
+		{
+			$val->add('t_school', __('所属学校名'))
+				->add_rule('max_length',50)
+				->add_rule('college_name');
+
+			$val->add('t_dept', __('学部名'))
+				->add_rule('max_length',50);
+
+			$val->add('t_subject',___('学科名')
+				->add_rule('max_length',50);
+		}
+
+		if (!$val->run())
+		{
+			$aInput['error'] = $val->error();
+
+			$this->template->content = View::forge($this->bn.DS.'edit',$aInput);
+			$this->template->javascript = array('cl.school_select.js');
+			return $this->template;
+		}
+
+		// 登録データ生成
+		$sCmKCode = '';
+		if (!CL_CAREERTASU_MODE && $aInput['t_school'])
+		{
+			$result = Model_College::getCollegeFromName($aInput['t_school']);
+			$row = $result->current();
+			if (!empty($row))
+			{
+				$sCmKCode = $row['cmKCode'];
+			}
+		}
+
+		$sFirst = null;
+		if (trim($aInput['t_pass']))
+		{
+			$sFirst = $aInput['t_pass'];
+		}
+		else
+		{
+			$sFirst = strtolower(Str::random('distinct', 8));
+		}
+		$sPass = sha1($sFirst);
+		$sHash = sha1($aInput['t_mail'].$sPass);
+
+		$aInsert['teacher'] = array(
+			'ttID'            => null,
+			'ttMail'          => $aInput['t_mail'],
+			'ttName'          => $aInput['t_name'],
+			'ttDept'          => (isset($aInput['t_dept']))? $aInput['t_dept']:'',
+			'ttSubject'       => (isset($aInput['t_subject']))? $aInput['t_subject']:'',
+			'cmKCode'         => $sCmKCode,
+			'ttPass'          => $sPass,
+			'ttFirst'         => $sFirst,
+			'ttLoginNum'      => 0,
+			'ttLastLoginDate' => '00000000000000',
+			'ttLoginDate'     => '00000000000000',
+			'ttPassMiss'      => 0,
+			'ttHash'          => $sHash,
+			'ttStatus'        => 1,
+			'ttDate'          => date('YmdHis'),
+		);
+		$aInsert['group'] = array(
+			'gtID' => $this->aGroup['gtID'],
+			'gpDate' => date('YmdHis'),
+		);
+
+		try
+		{
+			$sTtID = Model_Teacher::insertOrgTeacher($aInsert);
+		}
+		catch (Exception $e)
+		{
+			\Clfunc_Common::LogOut($e,__CLASS__);
+			Session::set('SES_ORG_ERROR_MSG',$e->getMessage());
+			Response::redirect($this->eRedirect);
+		}
+
+		Session::set('SES_ORG_ERROR_MSG', '先生「'.$aInput['t_name'].'」を登録しました。');
+		Response::redirect(DS.$this->bn);
+	}
+
+
+	public function action_edit($sTtID = null)
+	{
+		if (is_null($sTtID))
+		{
+			Session::set('SES_ORG_ERROR_MSG', '先生が指定されていません。');
+			Response::redirect(DS.$this->bn);
+		}
+		$result = Model_Group::getGroupTeachers(array(array('gtp.ttID','=',$sTtID),array('gtp.gtID','=',$this->aGroup['gtID'])));
+		if (!count($result))
+		{
+			Session::set('SES_ORG_ERROR_MSG', '対象の先生情報が見つかりません。');
+			Response::redirect(DS.$this->bn);
+		}
+		$aTeacher = $result->current();
+		$this->template->set_global('aTeacher',$aTeacher);
+
+		$aInput = array(
+			't_mail'    => $aTeacher['ttMail'],
+			't_name'    => $aTeacher['ttName'],
+			't_pass'    => '',
+			't_school'  => $aTeacher['cmName'],
+			't_dept'    => $aTeacher['ttDept'],
+			't_subject' => $aTeacher['ttSubject'],
+			'error' => null,
+		);
+
+		# タイトル
+		$sTitle = '先生情報の編集';
+		# パンくずリスト生成
+		$this->aBread[] = array('link'=>'/teacher','name'=>'先生一覧');
+		$this->aBread[] = array('name'=>$sTitle);
+		$this->template->set_global('breadcrumbs',$this->aBread);
+		$this->template->set_global('pagetitle',$sTitle);
+
+		if (!Input::post(null,false))
+		{
+			$this->template->content = View::forge($this->bn.DS.'edit',$aInput);
+			$this->template->javascript = array('cl.school_select.js');
+			return $this->template;
+		}
+
+		$aInput = Input::post();
+		$val = Validation::forge();
+		$val->add_callable('Helper_CustomValidation');
+
+		$val->add('t_mail', 'メールアドレス')
+		->add_rule('required')
+		->add_rule('valid_email')
+		->add_rule('max_length',200)
+		->add_rule('tmail_chk',$aTeacher['ttID']);
+
+		if (trim($aInput['t_pass']))
+		{
+			$val->add('t_pass', __('パスワード'))
+			->add_rule('required')
+			->add_rule('trim')
+			->add_rule('min_length', 8)
+			->add_rule('max_length', 32)
+			->add_rule('passwd_char');
+		}
+
+		$val->add('t_name', __('氏名'))
+		->add_rule('required')
+		->add_rule('trim')
+		->add_rule('max_length', 50);
+
+		if (!CL_CAREERTASU_MODE)
+		{
+			$val->add('t_school', '所属学校名')
+			->add_rule('max_length',50)
+			->add_rule('college_name');
+			$val->add('t_dept', '学部名')
+			->add_rule('max_length',50);
+			$val->add('t_subject', '学科名')
+			->add_rule('max_length',50);
+		}
+
+		if (!$val->run())
+		{
+			$aInput['error'] = $val->error();
+
+			$this->template->content = View::forge($this->bn.DS.'edit',$aInput);
+			$this->template->javascript = array('cl.school_select.js');
+			return $this->template;
+		}
+
+		// 登録データ生成
+		$sCmKCode = '';
+		if (!CL_CAREERTASU_MODE && $aInput['t_school'])
+		{
+			$result = Model_College::getCollegeFromName($aInput['t_school']);
+			$row = $result->current();
+			if (!empty($row))
+			{
+				$sCmKCode = $row['cmKCode'];
+			}
+		}
+
+		$aInsert = array(
+			'ttMail'    => $aInput['t_mail'],
+			'ttName'    => $aInput['t_name'],
+			'cmKCode'   => $sCmKCode,
+			'ttDept'    => (isset($aInput['t_dept']))? $aInput['t_dept']:'',
+			'ttSubject' => (isset($aInput['t_subject']))? $aInput['t_subject']:'',
+			'ttHash'    => sha1($aInput['t_mail'].$aTeacher['ttPass']),
+		);
+		if (trim($aInput['t_pass']))
+		{
+			$sFirst = $aInput['t_pass'];
+			$sPass = sha1($sFirst);
+			$sHash = sha1($aInput['t_mail'].$sPass);
+
+			$aInsert['ttFirst'] = $sFirst;
+			$aInsert['ttPass'] = sha1($sFirst);
+			$aInsert['ttPassMiss'] = 0;
+			$aInsert['ttPassDate'] = '0000-00-00';
+			$aInsert['ttHash'] = sha1($aInput['t_mail'].$sPass);
+		}
+
+		try
+		{
+			$sTtID = Model_Teacher::updateTeacher($aTeacher['ttID'], $aInsert);
+		}
+		catch (Exception $e)
+		{
+			\Clfunc_Common::LogOut($e,__CLASS__);
+			Session::set('SES_ORG_ERROR_MSG',$e->getMessage());
+			Response::redirect($this->eRedirect);
+		}
+
+		Session::set('SES_ORG_ERROR_MSG', '先生「'.$aInput['t_name'].'」の情報を更新しました。');
+		Response::redirect(DS.$this->bn);
+	}
+
+	public function action_csv()
+	{
+		# タイトル
+		$sTitle = 'CSVから先生の登録';
+		# パンくずリスト生成
+		$this->aBread[] = array('link'=>'/teacher','name'=>'先生一覧');
+		$this->aBread[] = array('name'=>$sTitle);
+		$this->template->set_global('breadcrumbs',$this->aBread);
+		$this->template->set_global('pagetitle',$sTitle);
+
+		if (!Input::post(null,false))
+		{
+			$data = array('error'=>null);
+			$this->template->content = View::forge($this->bn.DS.'csv',$data);
+			return $this->template;
+		}
+
+		$config = array(
+			'max_size' => CL_FILESIZE*1024*1024,
+			'path' => CL_UPPATH.DS.'temp',
+			'file_chmod' => 0666,
+			'ext_whitelist' => array('txt', 'csv'),
+			'type_whitelist' => array('text'),
+		);
+
+		Upload::process($config);
+
+		# 添付処理
+		$aMsg = null;
+		if (!Upload::is_valid())
+		{
+			$st_csv = Upload::get_errors('tt_csv');
+			if ($st_csv['errors'])
+			{
+				switch ($st_csv['errors'][0]['error'])
+				{
+					case Upload::UPLOAD_ERR_INI_SIZE:
+					case Upload::UPLOAD_ERR_FORM_SIZE:
+					case Upload::UPLOAD_ERR_MAX_SIZE:
+						$aMsg['tt_csv'] = __('指定できるファイルのサイズは:sizeMBまでです。',array('size'=>CL_FILESIZE));
+						break;
+					case Upload::UPLOAD_ERR_EXTENSION:
+					case Upload::UPLOAD_ERR_EXT_BLACKLISTED:
+					case Upload::UPLOAD_ERR_EXT_NOT_WHITELISTED:
+					case Upload::UPLOAD_ERR_TYPE_BLACKLISTED:
+					case Upload::UPLOAD_ERR_TYPE_NOT_WHITELISTED:
+					case Upload::UPLOAD_ERR_MIME_BLACKLISTED:
+					case Upload::UPLOAD_ERR_MIME_NOT_WHITELISTED:
+						$aMsg['tt_csv'] = __('登録できるファイルの拡張子は txt,csv のみです。');
+						break;
+					default:
+						$aMsg['tt_csv'] = __('ファイルアップロードに失敗しました。');
+						break;
+				}
+			}
+		}
+		if (!is_null($aMsg))
+		{
+			$data['error'] = $aMsg;
+			$this->template->content = View::forge($this->bn.DS.'csv',$data);
+			return $this->template;
+		}
+
+		$oFile = Upload::get_files('tt_csv');
+		$aCSV = ClFunc_Common::getCSV($oFile['file']);
+		if (!count($aCSV))
+		{
+			$data['error'] = array('tt_csv'=>__('登録するデータがCSVから取得できませんでした。'));
+			$this->template->content = View::forge($this->bn.DS.'csv',$data);
+			return $this->template;
+		}
+		if ($aCSV[0][0] == 'メールアドレス' || $aCSV[0][0] == 'Mail Address')
+		{
+			array_shift($aCSV);
+		}
+
+		$aInsert = null;
+		$aUpdate = null;
+
+		$aMail = array();
+		$aMsg = null;
+		$iAllCnt = 0;
+		if (!empty($aCSV))
+		{
+			foreach ($aCSV as $iKey => $aS)
+			{
+				$aTemp = null;
+				$iAllCnt++;
+				if (count($aS) == 1 && !$aS[0])
+				{
+					continue;
+				}
+				if (!$aS[0] || !filter_var($aS[0], FILTER_VALIDATE_EMAIL))
+				{
+					$aMsg[] = __(':no件目のメールアドレス（:value）は、メールアドレスとして正しく入力されていません。',array('no'=>($iKey + 1),'value'=>htmlspecialchars($aS[0])));
+				}
+				$result = Model_Teacher::getTeacherFromMail($aS[0]);
+				if (count($result))
+				{
+					$result = Model_Group::getGroupTeachers(array(array('tv.ttMail','=',$aS[0]),array('gtp.gtID','=',$this->aGroup['gtID'])));
+					if (count($result))
+					{
+						$aTemp = $result->current();
+						$aUpdate[$aTemp['ttID']] = $aS;
+					}
+					else
+					{
+						$aMsg[] = __(':no件目のメールアドレス（:value）は、団体外で既に利用されているため、登録できません。',array('no'=>($iKey + 1),'value'=>htmlspecialchars($aS[0])));
+					}
+				}
+				else
+				{
+					$aInsert[$aS[0]] = $aS;
+				}
+				if (!ClFunc_Common::stringValidation($aS[1],false,array(8,32),array('alpha','numeric','dashes','dots','slashes'),true))
+				{
+					$aMsg[] = __(':no件目のパスワードを指定する場合は、8文字以上32文字以下で半角大小英数字と一部記号【.（ドット）_（アンダースコア）/（スラッシュ）-（ハイフン）】の2種類以上を組み合わせて入力してください。',array('no'=>($iKey + 1)));
+				}
+				if (!ClFunc_Common::stringValidation($aS[2],true,array(0,50)))
+				{
+					$aMsg[] = __(':no件目の氏名（:value）は、50文字以下で入力してください。',array('no'=>($iKey + 1),'value'=>htmlspecialchars($aS[2])));;
+				}
+				if (!ClFunc_Common::stringValidation($aS[3],false,array(0,50)))
+				{
+					$aMsg[] = __(':no件目の学部（:value）は、50文字以下で入力してください。',array('no'=>($iKey + 1),'value'=>htmlspecialchars($aS[3])));;
+				}
+				if (!ClFunc_Common::stringValidation($aS[4],false,array(0,50)))
+				{
+					$aMsg[] = __(':no件目の学科（:value）は、50文字以下で入力してください。',array('no'=>($iKey + 1),'value'=>htmlspecialchars($aS[4])));;
+				}
+				if ($this->aGroup['gtLDAP'])
+				{
+					if (isset($aS[5]) && $aS[5] != '')
+					{
+						$where = array(
+							array('ttLoginID','=',$aS[5]),
+						);
+						if (!is_null($aTemp))
+						{
+							$where[] = array('ttID','!=',$aTemp['ttID']);
+						}
+						$result = Model_Teacher::getTeacher($where);
+						if (count($result))
+						{
+							$aMsg[] = __(':no件目のuid（:value）は、既に利用されているため、登録できません。',array('no'=>($iKey + 1),'value'=>htmlspecialchars($aS[5])));
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			$data['error'] = array('tt_csv'=>__('登録するデータがありません。'));
+			$this->template->content = View::forge($this->bn.DS.'csv',$data);
+			return $this->template;
+		}
+		if (!is_null($aMsg))
+		{
+			$data['error'] = array('valid'=>$aMsg);
+			$this->template->content = View::forge($this->bn.DS.'csv',$data);
+			return $this->template;
+		}
+
+		try
+		{
+			if (!is_null($aInsert))
+			{
+				$result = Model_Teacher::insertTeacherFromCSV($aInsert,$this->aGroup);
+			}
+			if (!is_null($aUpdate))
+			{
+				$result = Model_Teacher::updateTeacherFromCSV($aUpdate,$this->aGroup);
+			}
+		}
+		catch (Exception $e)
+		{
+			\Clfunc_Common::LogOut($e,__CLASS__);
+			Session::set('SES_ORG_ERROR_MSG',$e->getMessage());
+			Response::redirect($this->eRedirect);
+		}
+
+		Session::set('SES_ORG_NOTICE_MSG',__('CSVからの一括登録が完了しました。').__('（新規：:num1、更新：:num2）',array('num1'=>count($aInsert),'num2'=>count($aUpdate))));
+		Response::redirect(DS.$this->bn);
+	}
+
+	public function action_delete($sTtID = null)
+	{
+		if (is_null($sTtID))
+		{
+			Response::redirect('/'.$this->bn);
+		}
+		$result = Model_Group::getGroupTeachers(array(array('gtp.ttID','=',$sTtID),array('gtp.gtID','=',$this->aGroup['gtID'])));
+		if (!count($result))
+		{
+			Session::set('SES_ORG_ERROR_MSG', '対象の先生情報が見つかりません。');
+			Response::redirect(DS.$this->bn);
+		}
+		$aTeacher = $result->current();
+
+		try
+		{
+			$result = Model_Teacher::deleteGroupTeacher($aTeacher);
+		}
+		catch (Exception $e)
+		{
+			\Clfunc_Common::LogOut($e,__CLASS__);
+			Session::set('SES_ORG_ERROR_MSG',$e->getMessage());
+			Response::redirect($this->eRedirect);
+		}
+
+		Session::set('SES_ORG_NOTICE_MSG','先生「'.$aTeacher['ttName'].'」を削除しました。');
+		Response::redirect(DS.$this->bn);
+	}
+
+	public function action_classlist($sCID = null)
+	{
+		if (is_null($sCID))
+		{
+			Response::redirect('/'.$this->bn);
+		}
+
+		$aWhere = array(
+			array('gtID','=',$this->aGroup['gtID']),
+			array('ctID','=',$sCID),
+		);
+
+		$result = Model_Group::getGroupClasses($aWhere);
+		if (!count($result))
+		{
+			Response::redirect('/'.$this->bn);
+		}
+		$aClass = $result->current();
+
+		$result = Model_Group::getGroupTeachersClasses($aWhere,null,array('ttName'=>'asc'));
+		if (count($result))
+		{
+			$this->aTeachers = $result->as_array();
+		}
+
+		$sTitle = $aClass['ctName'].'の先生一覧';
+		$aBreadCrumbs = array();
+
+		# パンくずリスト生成
+		$aBreadCrumbs[] = array('name' => '講義一覧', 'link' => '/class');
+		$aBreadCrumbs[] = array('name' => $sTitle);
+		$this->template->set_global('breadcrumbs',$aBreadCrumbs);
+		# ページタイトル生成
+		$this->template->set_global('pagetitle',$sTitle);
+
+		# カスタムボタン
+		$aCustomBtn = array(
+			array(
+				'url'  => '/org/teacher/classmodify/'.$sCID,
+				'name' => '先生の追加/削除',
+			),
+		);
+		$this->template->set_global('aCustomBtn',$aCustomBtn);
+
+		$this->template->content = View::forge($this->bn.DS.'classlist');
+		$this->template->content->set('aTeachers',$this->aTeachers);
+		$this->template->content->set('aClass',$aClass);
+		$this->template->javascript = array('cl.org.teacher.js');
+		return $this->template;
+	}
+
+	public function action_classmodify($sCID = null)
+	{
+		if (is_null($sCID))
+		{
+			Response::redirect('/'.$this->bn);
+		}
+
+		$aWhere = array(
+			array('gtID','=',$this->aGroup['gtID']),
+		);
+
+		$result = Model_Group::getGroupTeachers(array(array('gtp.gtID','=',$this->aGroup['gtID'])),null,array('tv.ttName'=>'asc'));
+		if (count($result))
+		{
+			$this->aTeachers = $result->as_array('ttID');
+		}
+
+		$aWhere[] = array('ctID','=',$sCID);
+
+		$result = Model_Group::getGroupClasses($aWhere);
+		if (!count($result))
+		{
+			Response::redirect('/'.$this->bn);
+		}
+		$aClass = $result->current();
+
+		$aCTeachers = null;
+		$result = Model_Group::getGroupTeachersClasses($aWhere,null,array('ttName'=>'asc'));
+		if (count($result))
+		{
+			$aCTeachers = $result->as_array('ttID');
+		}
+
+		$sTitle = '先生の追加/削除 - '.$aClass['ctName'];
+		$aBreadCrumbs = array();
+
+		# パンくずリスト生成
+		$aBreadCrumbs[] = array('name' => '講義一覧', 'link' => '/class');
+		$aBreadCrumbs[] = array('name' => $aClass['ctName'].'の先生一覧', 'link' => '/teacher/classlist/'.$sCID);
+		$aBreadCrumbs[] = array('name' => $sTitle);
+		$this->template->set_global('breadcrumbs',$aBreadCrumbs);
+		# ページタイトル生成
+		$this->template->set_global('pagetitle',$sTitle);
+
+		$this->template->content = View::forge($this->bn.DS.'classmodify');
+		$this->template->content->set('aTeachers',$this->aTeachers);
+		$this->template->content->set('aCTeachers',$aCTeachers);
+		$this->template->content->set('aClass',$aClass);
+		$this->template->javascript = array('cl.org.teacher.js');
+		return $this->template;
+	}
+}
+
+

@@ -1,0 +1,43 @@
+<?php
+	$errClass = array('mc_name'=>'');
+	$errMsg = $errClass;
+
+	if (!is_null($error)):
+		foreach ($errClass as $key => $val):
+			if (isset($error[$key])):
+				$errClass[$key] = ' class="input-error"';
+				$errMsg[$key] = '<p class="error-msg">'.$error[$key].'</p>';
+			endif;
+		endforeach;
+	endif;
+?>
+
+
+<div class="info-box">
+<form action="/t/material/cateedit/<?php echo $aMCategory['mcID']; ?>" method="post">
+	<div class="formControl">
+		<div class="formGroup">
+			<div class="formLabel">カテゴリ名</div>
+			<div class="formContent inline-box">
+				<input type="text" name="mc_name" value="<?php echo $mc_name; ?>" maxlength="<?php echo CL_TITLE_LENGTH; ?>" placeholder="カテゴリ名を入力してください" class="width-40em text-left"<?php echo $errClass['mc_name']; ?>>
+				<?php echo $errMsg['mc_name']; ?>
+			</div>
+		</div>
+<?php
+	$aCheck = array(0=>'',1=>'');
+	$aCheck[$mc_mail] = ' checked';
+?>
+		<div class="formGroup">
+			<div class="formLabel">メール通知</div>
+			<div class="formContent inline-box">
+				<label class="formChk"><input type="radio" name="mc_mail" value="0"<?php echo $aCheck[0]; ?>>通知しない</label>
+				<label class="formChk"><input type="radio" name="mc_mail" value="1"<?php echo $aCheck[1]; ?>>通知する</label>
+				<p class="font-silver">※教材を公開した際に学生へメール通知をしたい場合は「通知する」を選択します。</p>
+			</div>
+		</div>
+	</div>
+	<div class="button-box mt32">
+		<button type="submit" class="button do">更新</button>
+	</div>
+</form>
+</div>
