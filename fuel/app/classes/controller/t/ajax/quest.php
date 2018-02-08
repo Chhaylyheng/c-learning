@@ -838,5 +838,46 @@ class Controller_T_Ajax_Quest extends Controller_T_Ajax
 		$this->response($res);
 		return;
 	}
+public function get_Question()
+ {
+  $aQSAL = null;
+  $this->format = 'json';   
+  while (is_null($aQSAL))
+  {
+   $result = Model_Class::getClassArchive('c005096089','QuestStuAnsList');
+   if (!count($result))
+   {
+    try
+    {
+     $aInsert = array(
+      'ctID' => 'c005096089',
+      'caType' => 'QuestStuAnsList',
+      'caProgress' => 0,
+      'caDate' => date('YmdHis'),
+     );
+     $result = Model_Class::insertClassArchive($aInsert);
+    }
+    catch (Exception $e)
+    {
+     \Clfunc_Common::LogOut($e,__CLASS__);
+     Session::set('SES_T_ERROR_MSG',$e->getMessage());
+     Response::redirect($this->eRedirect);
+    }
+   }
+   else
+   {
+    $aQSAL = $result->current();
+   }
+  }
 
+  $aQuest = null;
+  $result = Model_Quest::getQuestBaseFromClass('c005096089',null,null,array('qb.qbSort'=>'desc'));
+  if (count($result))
+  {
+   $aQuest = $result->as_array();
+  }
+  $res = array('data'=>$aQuest);
+  $this->response($res);
+  return;
+ }
 }
